@@ -1,9 +1,15 @@
 (ns firmata.core
-  (:require [clojure.core.async :as a :refer [go chan >! >!! <! alts!! <!!]]
-            [firmata.stream :as st]
-            [firmata.sysex :refer :all]
-            [firmata.util :refer :all])
-  (:import [firmata.stream SerialStream SocketStream]))
+  (:require [firmata.sysex :refer [SYSEX_START SYSEX_END
+                                   REPORT_FIRMWARE EXTENDED_ANALOG SAMPLING_INTERVAL
+                                   CAPABILITY_QUERY PIN_STATE_QUERY ANALOG_MAPPING_QUERY
+                                   read-sysex-event modes]]
+            [firmata.util :refer [msb lsb bytes-to-int]]
+            [firmata.stream :as st :refer [SerialStream SocketStream]]
+            #+clj  [clojure.core.async :as a :refer [go chan >! >!! <! alts!! <!!]]
+            #+cljs [cljs.core.async    :as a :refer [chan >! <!]])
+  #+cljs
+  (:require-macros
+    [cljs.core.async.macros :refer [go alt!]]))
 
 ; Message Types
 
@@ -111,7 +117,10 @@
         previous-port (get-in @(:state board)[:digital-in port])
         updated-port (bytes-to-int (.read in) (.read in))
         pin-change (- updated-port previous-port)
-        pin (-> pin-change Math/abs BigInteger/valueOf .getLowestSetBit (max 0) (+ (* 8 port)))
+        pin
+          #+clj  (-> pin-change Math/abs BigInteger/valueOf .getLowestSetBit (max 0) (+ (* 8 port)))
+          ;; FIXME: Write clojurescript compatible version
+          #+cljs 0
         raw-value (if (> pin-change 0) 1 0)]
     (swap! (:state board) assoc-in [:digital-in port] updated-port)
     {:type :digital-msg
@@ -159,9 +168,16 @@
 
 (defn- take-with-timeout
   [ch default]
-  (or (first (alts!! [ch (a/timeout 5000)])) default))
+  #+clj
+  (or (first (alts!! [ch (a/timeout 5000)])) default)
+  #+cljs
+  (or (first (go
+              (alt! ch
+                    (a/timeout 5000))))
+      default)
+  )
 
-(defn- high-low-value 
+(defn- high-low-value
   "Takes the possible input values from the set [:high :low 1 0 'high 'low \\1 \\0]
   and converts it to a digital value."
   [value]
@@ -176,7 +192,7 @@
     \0    :low
     value))
 
-(defn to-keyword 
+(defn to-keyword
   "Converts the raw digital values to keywords high or low."
   [raw-value] (if (= 1 raw-value) :high :low))
 
@@ -196,8 +212,8 @@
 
         ; Open the stream and attach ourselves to it
         port (st/open! stream)
-        _ (st/listen port (firmata-handler {:state board-state 
-                                            :channel read-ch 
+        _ (st/listen port (firmata-handler {:state board-state
+                                            :channel read-ch
                                             :from-raw-digital from-raw-digital}))
 
         ; Need to pull these values before wiring up the remaining channels, otherwise, they get lost
@@ -300,7 +316,8 @@
 
       (send-message
        [this data]
-       (>!! write-ch data)
+       #+clj  (>!! write-ch data)
+       #+cljs (a/go (>! write-ch data))
        this)
 
       (event-channel
@@ -324,7 +341,7 @@
   (default value 1024)."
   [port-name & {:keys [baud-rate event-buffer-size from-raw-digital]
                 :or {baud-rate 57600 event-buffer-size 1024 from-raw-digital to-keyword}}]
-  (open-board (SerialStream. port-name baud-rate) 
+  (open-board (SerialStream. port-name baud-rate)
               :event-buffer-size event-buffer-size
               :from-raw-digital from-raw-digital))
 
@@ -334,6 +351,6 @@
   (default value 1024)."
   [host port & {:keys [event-buffer-size from-raw-digital]
                 :or {event-buffer-size 1024 from-raw-digital to-keyword}}]
-    (open-board (SocketStream. host port) 
+    (open-board (SocketStream. host port)
                 :event-buffer-size event-buffer-size
                 :from-raw-digital from-raw-digital))

@@ -1,5 +1,5 @@
 (ns firmata.sysex
-    (:require [firmata.util :refer :all]))
+  (:require [firmata.util :refer [consume-until bytes-to-int to-number]]))
 
 ; SysEx messages
 
@@ -25,7 +25,7 @@
 (def SYSEX_REALTIME          0x7F ); MIDI Reserved for realtime messages
 
 ; TODO: This seems to be mixing a bit of things from the other
-(def  modes [:input :output :analog :pwm :servo :shift :i2c])
+(def modes [:input :output :analog :pwm :servo :shift :i2c])
 
 
 (defn consume-sysex
@@ -74,13 +74,13 @@
              (inc pin)))))
 
 (defmulti read-sysex-event
-  "Reads a sysex message.  
+  "Reads a sysex message.
 
-   Returns a map with, at a minimum, the key :type.  This should 
+   Returns a map with, at a minimum, the key :type.  This should
    indicates what sort of sysex message is being received.
 
    For example, the result of a REPORT_FIRMWARE message is
-   
+
        { :type :firmaware-report
          :version \"2.3\"
          :name \"StandardFirmata\" }"

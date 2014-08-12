@@ -1,5 +1,4 @@
-(ns firmata.util
-  (:require [clojure.core.async :as a]))
+(ns firmata.util)
 
 ; Number conversions
 
@@ -49,6 +48,8 @@
   [x]
   (* x 0.004882814))
 
+; TODO: Add clojurescript support
+#+clj
 (defn to-hex-str
   "For debug output"
   [x] (str "0x" (.toUpperCase (Integer/toHexString x))))

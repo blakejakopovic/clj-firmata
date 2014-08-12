@@ -1,5 +1,7 @@
 (ns firmata.receiver
-  (:require [firmata.core :refer :all]
+  (:require [firmata.core :refer [event-channel
+                                  release-event-channel
+                                  event-publisher]]
             [clojure.core.async :as a]))
 
 (defprotocol EventHandler
